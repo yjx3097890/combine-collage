@@ -36,13 +36,15 @@ class PhotosViewController: UICollectionViewController {
     var selectedPhotos: AnyPublisher<UIImage, Never> {
         selectedPhotosSubject.eraseToAnyPublisher()
     }
-    
+    @Published
+    var selectedPhotosCount = 0
   
   // MARK: - Private properties
   private let selectedPhotosSubject = PassthroughSubject<UIImage, Never>()
   private lazy var photos = PhotosViewController.loadPhotos()
   private lazy var imageManager = PHCachingImageManager()
-  
+    private var subscriptions: Set<AnyCancellable> = []
+    
   private lazy var thumbnailSize: CGSize = {
     let cellSize = (self.collectionViewLayout as! UICollectionViewFlowLayout).itemSize
     return CGSize(width: cellSize.width * UIScreen.main.scale,
@@ -55,15 +57,18 @@ class PhotosViewController: UICollectionViewController {
     super.viewDidLoad()
     
     // Check for Photos access authorization and reload the list if authorized.
-    PHPhotoLibrary.fetchAuthorizationStatus { [weak self] status in
-      if status {
-        self?.photos = PhotosViewController.loadPhotos()
-        
-        DispatchQueue.main.async {
-          self?.collectionView.reloadData()
-        }
-      }
-    }
+    PHPhotoLibrary.shared().isAuthorized
+        .receive(on: DispatchQueue.main)
+        .sink(receiveValue: {[weak self] status in
+                if status {
+                  self?.photos = PhotosViewController.loadPhotos()
+                  self?.collectionView.reloadData()
+                } else {
+                    self?.alert(title: "权限不足", text: "在设置中开启图片访问权限").sink {
+                        self?.navigationController?.popViewController(animated: true)
+                    }.store(in: &(self!.subscriptions))
+                }}).store(in: &subscriptions)
+     
   }
   
   override func viewWillDisappear(_ animated: Bool) {
@@ -111,6 +116,7 @@ class PhotosViewController: UICollectionViewController {
       
       // Send the selected photo
         self.selectedPhotosSubject.send(image)
+        self.selectedPhotosCount += 1
     })
   }
 

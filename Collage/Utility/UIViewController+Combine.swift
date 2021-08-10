@@ -30,5 +30,18 @@ import UIKit
 import Combine
 
 extension UIViewController {
-  
+    func alert(title: String, text: String?) -> AnyPublisher<Void, Never> {
+        let alertVC = UIAlertController(title: title, message: text, preferredStyle: .alert)
+        
+        return Future { promise in
+            let alertAction = UIAlertAction(title: "OK", style: .default) { _ in
+                promise(.success(()))
+            }
+            alertVC.addAction(alertAction)
+            self.present(alertVC, animated: true, completion: nil)
+        }.handleEvents( receiveCancel: {
+            // 取消订阅
+            self.dismiss(animated: true)
+        }).eraseToAnyPublisher()
+    }
 }

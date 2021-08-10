@@ -90,21 +90,47 @@ class MainViewController: UIViewController {
 //    let newImages = images.value + [UIImage(named: "IMG_1907.jpg")!]
 //    images.send(newImages)
     let photos = storyboard!.instantiateViewController(withIdentifier: "PhotosViewController") as! PhotosViewController
-    let newPhotoPublish = photos.selectedPhotos
+    photos.selectedPhotosCount = images.value.count
+    photos.$selectedPhotosCount.filter{$0 > 0}.map {
+        print("selected \($0)")
+       return "slelcted \($0) photos"
+    }
+    .assign(to: \.title, on: self)
+    .store(in: &subsriptions)
+    
+    let newPhotoPublish = photos.selectedPhotos.filter { image in
+        image.size.width <= image.size.height
+    }
+        .prefix {[unowned self] _ in
+        self.images.value.count < 6
+    }.share()
     newPhotoPublish.map { [unowned self] newImage in
         self.images.value + [newImage]
     }
     .assign(to: \.value, on: images)
     .store(in: &subsriptions)
     
+    newPhotoPublish.ignoreOutput()
+        .delay(for: 2.0, scheduler: DispatchQueue.main)
+        .sink(receiveCompletion: {[unowned self]_ in
+            self.updateUI(photos: self.images.value)
+        }, receiveValue: {_ in })
+        .store(in: &subsriptions)
+    
+    newPhotoPublish.filter{[unowned self] _ in
+        self.images.value.count == 5
+    }
+    .flatMap() { [unowned self] _ in
+         self.alert(title: "Limited reached", text: "最多只能传 6 个图片")
+    }.sink(receiveValue: {[weak navigationController] _ in
+        navigationController?.popViewController(animated: true)
+    }).store(in: &subsriptions)
+    
     navigationController?.pushViewController(photos, animated: true)
   }
   
   private func showMessage(_ title: String, description: String? = nil) {
-    let alert = UIAlertController(title: title, message: description, preferredStyle: .alert)
-    alert.addAction(UIAlertAction(title: "Close", style: .default, handler: { alert in
-      self.dismiss(animated: true, completion: nil)
-    }))
-    present(alert, animated: true, completion: nil)
+    alert(title: title, text: description)
+        .sink(receiveValue: {}).store(in: &subsriptions)
   }
 }
